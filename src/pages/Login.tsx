@@ -2,28 +2,51 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner"; // Usando o sistema de notificação que já tem no projeto
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Tenta enviar um Magic Link (login sem senha, só por email)
-      // É mais fácil de configurar agora no início
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-      });
-
-      if (error) throw error;
-
-      toast.success("Link de login enviado para seu email!");
+      if (isRegistering) {
+        // REGISTRO DE NOVO USUÁRIO
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/login`,
+          },
+        });
+        if (error) throw error;
+        toast.success("Cadastro realizado! Verifique seu e-mail para confirmar a conta.");
+        setIsRegistering(false);
+      } else {
+        // LOGIN EXISTENTE
+        const { error, data } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        
+        if (error) {
+          if (error.message.includes("Email not confirmed")) {
+            toast.error("Por favor, confirme seu e-mail antes de fazer login.");
+          } else {
+            throw error;
+          }
+        } else if (data.user) {
+          toast.success("Bem-vindo de volta!");
+          navigate("/dashboard");
+        }
+      }
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -33,32 +56,56 @@ const Login = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white p-4">
-      <div className="w-full max-w-md space-y-8 bg-slate-800 p-8 rounded-lg shadow-xl">
+      <div className="w-full max-w-md space-y-8 bg-slate-800 p-8 rounded-lg shadow-xl border border-slate-700">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-amber-500">Elite Ametista</h2>
-          <p className="mt-2 text-gray-400">Entre para acessar sua ficha</p>
+          <h2 className="text-3xl font-bold text-amber-500 uppercase tracking-tighter">Elite Ametista</h2>
+          <p className="mt-2 text-gray-400">
+            {isRegistering ? "Crie sua conta de jogador" : "Acesse seu grimório"}
+          </p>
         </div>
 
-        <form onSubmit={handleLogin} className="mt-8 space-y-6">
-          <div>
+        <form onSubmit={handleAuth} className="mt-8 space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-300">E-mail</label>
             <Input
               type="email"
-              placeholder="Seu email"
+              placeholder="seu@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="bg-slate-700 border-slate-600 text-white"
+              className="bg-slate-700 border-slate-600 focus:ring-amber-500"
+              required
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-300">Senha</label>
+            <Input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="bg-slate-700 border-slate-600 focus:ring-amber-500"
               required
             />
           </div>
 
           <Button 
             type="submit" 
-            className="w-full bg-amber-600 hover:bg-amber-700"
+            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold"
             disabled={loading}
           >
-            {loading ? "Enviando..." : "Entrar com Email Mágico"}
+            {loading ? "Processando..." : isRegistering ? "Registrar" : "Entrar"}
           </Button>
         </form>
+
+        <div className="text-center mt-4">
+          <button
+            onClick={() => setIsRegistering(!isRegistering)}
+            className="text-amber-500 hover:text-amber-400 text-sm underline underline-offset-4"
+          >
+            {isRegistering ? "Já tem uma conta? Faça login" : "Não tem conta? Registre-se aqui"}
+          </button>
+        </div>
       </div>
     </div>
   );
