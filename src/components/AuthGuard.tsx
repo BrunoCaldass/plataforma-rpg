@@ -1,33 +1,48 @@
-import { useEffect, useState } from "react";
+// ============================================================
+// components/AuthGuard.tsx — Route Guard com RBAC
+// ============================================================
 import { Navigate, Outlet } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+import type { UserRole } from "@/types/auth";
 
-export const AuthGuard = () => {
-  const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+interface AuthGuardProps {
+  /** Se definido, exige que o usuário tenha este papel para acessar */
+  requiredRole?: UserRole;
+}
 
-  useEffect(() => {
-    // Verifica a sessão atual ao carregar
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+/**
+ * Componente wrapper para rotas protegidas.
+ * - Sem `requiredRole`: exige apenas autenticação.
+ * - Com `requiredRole`: exige autenticação + papel específico.
+ */
+export function AuthGuard({ requiredRole }: AuthGuardProps) {
+  const { state } = useAuth();
 
-    // Fica ouvindo mudanças (login/logout)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  if (loading) {
-    return <div className="flex items-center justify-center h-screen bg-slate-900 text-amber-500">Carregando Grimório...</div>;
+  // Estado de carregamento
+  if (state.isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-background">
+        <div className="relative">
+          {/* Anel animado */}
+          <div className="w-16 h-16 rounded-full border-4 border-muted border-t-primary animate-spin" />
+          <div className="absolute inset-0 w-16 h-16 rounded-full border-4 border-transparent border-b-gold-glow animate-spin [animation-direction:reverse] [animation-duration:1.5s]" />
+        </div>
+        <p className="mt-6 font-display text-lg gold-text tracking-widest animate-pulse">
+          Abrindo Grimório…
+        </p>
+      </div>
+    );
   }
 
-  // Se tem sessão, mostra o conteúdo (Outlet). Se não, chuta pro Login.
-  return session ? <Outlet /> : <Navigate to="/login" replace />;
-};
+  // Não autenticado → Login
+  if (!state.isAuthenticated || !state.user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Papel insuficiente → Dashboard padrão
+  if (requiredRole && state.user.role !== requiredRole) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Outlet />;
+}
